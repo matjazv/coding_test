@@ -59,13 +59,13 @@ impl Process for TransactionType {
 
 impl Process for Deposit {
     fn process(&self, account: &mut Account) {
-        println!("processing deposit for account: {}", account.id());
+        eprintln!("processing deposit for account: {}", account.id());
 
         if !account.is_locked() {
             account.available += self.amount;
             account.total += self.amount;
         } else {
-            println!(
+            eprintln!(
                 "account {} is locked. ignoring processing transaction.",
                 account.id()
             );
@@ -75,13 +75,13 @@ impl Process for Deposit {
 
 impl Process for Withdrawal {
     fn process(&self, account: &mut Account) {
-        println!("processing withdrawal for account: {}", account.id());
+        eprintln!("processing withdrawal for account: {}", account.id());
 
         if !account.is_locked() && account.available >= self.amount {
             account.available -= self.amount;
             account.total -= self.amount;
         } else {
-            println!(
+            eprintln!(
                 "account {} is locked or has insufficient founds available. ignoring processing transaction.",
                 account.id()
             );
