@@ -1,24 +1,23 @@
 use crate::transaction::DepositedTransaction;
-use std::fmt::format;
 
 use serde::{Serialize, Serializer};
 
-fn round_serialize<S>(x: &f32, s: S) -> Result<S::Ok, S::Error>
+fn float_precision_serialize<S>(num: &f32, s: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
-    s.serialize_f32(format!("{:.4}", x).parse().unwrap())
+    s.serialize_f32(format!("{:.4}", num).parse().unwrap())
 }
 
 #[derive(Serialize)]
 pub struct Account {
     #[serde(rename(serialize = "client"))]
     id: u16,
-    #[serde(serialize_with = "round_serialize")]
+    #[serde(serialize_with = "float_precision_serialize")]
     pub available: f32,
-    #[serde(serialize_with = "round_serialize")]
+    #[serde(serialize_with = "float_precision_serialize")]
     pub held: f32,
-    #[serde(serialize_with = "round_serialize")]
+    #[serde(serialize_with = "float_precision_serialize")]
     pub total: f32,
     locked: bool,
     #[serde(skip_serializing)]

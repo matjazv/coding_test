@@ -1,5 +1,6 @@
 use crate::account::Account;
 
+use log::{info, warn};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -102,7 +103,11 @@ impl Process for TransactionType {
 
 impl Process for Deposit {
     fn process(&self, account: &mut Account) {
-        eprintln!("processing deposit for account: {}", account.id());
+        info!(
+            "processing tx: {} (deposit) for account: {}",
+            self.tx_id,
+            account.id()
+        );
 
         if !account.is_locked() {
             account.add_deposited_transaction(DepositedTransaction {
@@ -113,7 +118,7 @@ impl Process for Deposit {
             account.available += self.amount;
             account.total += self.amount;
         } else {
-            eprintln!(
+            warn!(
                 "account {} is locked. ignoring processing transaction.",
                 account.id()
             );
@@ -123,13 +128,17 @@ impl Process for Deposit {
 
 impl Process for Withdrawal {
     fn process(&self, account: &mut Account) {
-        eprintln!("processing withdrawal for account: {}", account.id());
+        info!(
+            "processing tx: {} (withdrawal) for account: {}",
+            self.tx_id,
+            account.id()
+        );
 
         if !account.is_locked() && account.available >= self.amount {
             account.available -= self.amount;
             account.total -= self.amount;
         } else {
-            eprintln!(
+            warn!(
                 "account {} is locked or has insufficient founds available. ignoring processing transaction.",
                 account.id()
             );
@@ -139,7 +148,11 @@ impl Process for Withdrawal {
 
 impl Process for Dispute {
     fn process(&self, account: &mut Account) {
-        eprintln!("processing dispute for account: {}", account.id());
+        info!(
+            "processing tx: {} (dispute) for account: {}",
+            self.tx_id,
+            account.id()
+        );
 
         if !account.is_locked() {
             if let Some(transaction) = account.get_deposited_transaction(self.tx_id) {
@@ -147,15 +160,34 @@ impl Process for Dispute {
                     account.set_deposited_transaction_as_dispute(self.tx_id);
                     account.available -= transaction.amount;
                     account.held += transaction.amount;
+                } else {
+                    warn!(
+                        "transaction {} is not in dispute mode or account {} has insufficient founds available. ignoring processing transaction.",
+                        self.tx_id, account.id()
+                    );
                 }
+            } else {
+                warn!(
+                    "transaction {} does not exist or is not deposited transaction. ignoring processing transaction.",
+                    self.tx_id
+                );
             }
+        } else {
+            warn!(
+                "account {} is locked. ignoring processing transaction.",
+                account.id()
+            );
         }
     }
 }
 
 impl Process for Resolve {
     fn process(&self, account: &mut Account) {
-        eprintln!("processing resolve for account: {}", account.id());
+        info!(
+            "processing tx: {} (resolve) for account: {}",
+            self.tx_id,
+            account.id()
+        );
 
         if !account.is_locked() {
             if let Some(transaction) = account.get_deposited_transaction(self.tx_id) {
@@ -163,15 +195,34 @@ impl Process for Resolve {
                     account.clear_deposited_transaction_as_dispute(self.tx_id);
                     account.available += transaction.amount;
                     account.held -= transaction.amount;
+                } else {
+                    warn!(
+                        "transaction {} is not in dispute mode or account {} has insufficient founds held. ignoring processing transaction.",
+                        self.tx_id, account.id()
+                    );
                 }
+            } else {
+                warn!(
+                    "transaction {} does not exist or is not deposited transaction. ignoring processing transaction.",
+                    self.tx_id
+                );
             }
+        } else {
+            warn!(
+                "account {} is locked. ignoring processing transaction.",
+                account.id()
+            );
         }
     }
 }
 
 impl Process for Chargeback {
     fn process(&self, account: &mut Account) {
-        eprintln!("processing chargeback for account: {}", account.id());
+        info!(
+            "processing tx: {} (chargeback) for account: {}",
+            self.tx_id,
+            account.id()
+        );
 
         if !account.is_locked() {
             if let Some(transaction) = account.get_deposited_transaction(self.tx_id) {
@@ -180,8 +231,23 @@ impl Process for Chargeback {
                     account.held -= transaction.amount;
                     account.total -= transaction.amount;
                     account.lock();
+                } else {
+                    warn!(
+                        "transaction {} is not in dispute mode or account {} has insufficient founds held. ignoring processing transaction.",
+                        self.tx_id, account.id()
+                    );
                 }
+            } else {
+                warn!(
+                    "transaction {} does not exist or is not deposited transaction. ignoring processing transaction.",
+                    self.tx_id
+                );
             }
+        } else {
+            warn!(
+                "account {} is locked. ignoring processing transaction.",
+                account.id()
+            );
         }
     }
 }
