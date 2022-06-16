@@ -119,7 +119,7 @@ impl Process for Deposit {
             account.total += self.amount;
         } else {
             warn!(
-                "account {} is locked. ignoring processing transaction.",
+                "account {} is locked. ignoring processing tx.",
                 account.id()
             );
         }
@@ -139,7 +139,7 @@ impl Process for Withdrawal {
             account.total -= self.amount;
         } else {
             warn!(
-                "account {} is locked or has insufficient founds available. ignoring processing transaction.",
+                "account {} is locked or has insufficient founds available. ignoring processing tx.",
                 account.id()
             );
         }
@@ -162,19 +162,19 @@ impl Process for Dispute {
                     account.held += transaction.amount;
                 } else {
                     warn!(
-                        "transaction {} is not in dispute mode or account {} has insufficient founds available. ignoring processing transaction.",
+                        "tx {} is not in dispute mode or account {} has insufficient founds available. ignoring processing tx.",
                         self.tx_id, account.id()
                     );
                 }
             } else {
                 warn!(
-                    "transaction {} does not exist or is not deposited transaction. ignoring processing transaction.",
+                    "tx {} does not exist or is not deposited tx. ignoring processing tx.",
                     self.tx_id
                 );
             }
         } else {
             warn!(
-                "account {} is locked. ignoring processing transaction.",
+                "account {} is locked. ignoring processing tx.",
                 account.id()
             );
         }
@@ -197,19 +197,19 @@ impl Process for Resolve {
                     account.held -= transaction.amount;
                 } else {
                     warn!(
-                        "transaction {} is not in dispute mode or account {} has insufficient founds held. ignoring processing transaction.",
+                        "tx {} is not in dispute mode or account {} has insufficient founds held. ignoring processing tx.",
                         self.tx_id, account.id()
                     );
                 }
             } else {
                 warn!(
-                    "transaction {} does not exist or is not deposited transaction. ignoring processing transaction.",
+                    "tx {} does not exist or is not deposited tx. ignoring processing tx.",
                     self.tx_id
                 );
             }
         } else {
             warn!(
-                "account {} is locked. ignoring processing transaction.",
+                "account {} is locked. ignoring processing tx.",
                 account.id()
             );
         }
@@ -233,19 +233,19 @@ impl Process for Chargeback {
                     account.lock();
                 } else {
                     warn!(
-                        "transaction {} is not in dispute mode or account {} has insufficient founds held. ignoring processing transaction.",
+                        "tx {} is not in dispute mode or account {} has insufficient founds held. ignoring processing tx.",
                         self.tx_id, account.id()
                     );
                 }
             } else {
                 warn!(
-                    "transaction {} does not exist or is not deposited transaction. ignoring processing transaction.",
+                    "tx {} does not exist or is not deposited tx. ignoring processing tx.",
                     self.tx_id
                 );
             }
         } else {
             warn!(
-                "account {} is locked. ignoring processing transaction.",
+                "account {} is locked. ignoring processing tx.",
                 account.id()
             );
         }

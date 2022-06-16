@@ -67,7 +67,7 @@ impl Account {
     pub fn set_deposited_transaction_as_dispute(&mut self, tx_id: u32) {
         for mut transaction in &mut self.deposited_transactions {
             if transaction.tx_id == tx_id {
-                info!("setting tx: {} in dispute mode", tx_id);
+                info!("tx: {} setting in dispute mode", tx_id);
                 transaction.in_dispute = true;
             }
         }
@@ -76,7 +76,7 @@ impl Account {
     pub fn clear_deposited_transaction_as_dispute(&mut self, tx_id: u32) {
         for mut transaction in &mut self.deposited_transactions {
             if transaction.tx_id == tx_id {
-                info!("clearing tx: {} in dispute mode", tx_id);
+                info!("tx: {} clearing in dispute mode", tx_id);
                 transaction.in_dispute = false;
             }
         }

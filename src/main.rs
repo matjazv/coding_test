@@ -41,6 +41,14 @@ fn process_payments(
         .delimiter(b',')
         .from_reader(file);
 
+    // Here we have an opportunity to make a code to run in parallel.
+    // We would need to be careful that for each client only one thread would be in use otherwise
+    // it could happen that transactions would not be processed in a correct order.
+    // One solution would be that we will have a pool of threads and check if any thread is already
+    // processing transaction(s) for a client and if so, send to this thread transaction data
+    // (for example, we could use std::sync::mpsc to do that). If there is no thread currently
+    // processing client transaction(s) and if any thread is free, use a new thread from a pool
+    // to process transaction data for a client.
     for result in reader.deserialize() {
         let transaction: Transaction = match result {
             Ok(transaction) => transaction,
@@ -64,6 +72,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let file_path = get_file_path().expect("file path not provided");
 
+    // In real world application this data won't be stored in memory (because we could have a lot of data)
+    // but in some database or even database + partially in memory to have a quick access.
     let mut accounts: HashMap<u16, Account> = HashMap::new();
     process_payments(file_path, &mut accounts).expect("critical error when processing payments");
 
