@@ -56,7 +56,12 @@ impl Account {
         self.transactions.push(transaction);
     }
 
-    pub fn deposit(&mut self, deposit: &Deposit) {
+    pub fn deposit(&mut self, deposit: &Deposit) -> bool {
+        if deposit.amount <= 0 as f32 {
+            warn!("tx: {} has zero or negative balance inside", deposit.tx_id);
+            return false;
+        }
+
         self.add_transaction(DepositedTransaction {
             tx_id: deposit.tx_id,
             amount: deposit.amount,
@@ -65,9 +70,19 @@ impl Account {
 
         self.available += deposit.amount;
         self.total += deposit.amount;
+
+        true
     }
 
     pub fn withdrawal(&mut self, withdrawal: &Withdrawal) -> bool {
+        if withdrawal.amount <= 0 as f32 {
+            warn!(
+                "tx: {} has zero or negative balance inside",
+                withdrawal.tx_id
+            );
+            return false;
+        }
+
         if self.available < withdrawal.amount {
             warn!("account: {} has insufficient funds available", self.id);
             return false;

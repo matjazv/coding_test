@@ -103,7 +103,9 @@ impl Process for Deposit {
         );
 
         if !account.is_locked() {
-            account.deposit(self);
+            if !account.deposit(self) {
+                warn!("can not process deposit for account {}.", account.id());
+            }
         } else {
             warn!(
                 "account {} is locked. ignoring processing tx.",
