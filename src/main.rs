@@ -41,7 +41,7 @@ fn process_payments(
         .from_reader(file);
     for result in reader.deserialize() {
         let transaction: Transaction = result?;
-        eprintln!("{:?}", transaction);
+        //eprintln!("{:?}", transaction);
 
         let account = accounts
             .entry(transaction.client_id())
