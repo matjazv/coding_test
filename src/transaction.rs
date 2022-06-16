@@ -8,7 +8,7 @@ struct Deposit {
     client_id: u16,
     #[serde(rename(deserialize = "tx"))]
     tx_id: u32,
-    amount: Option<f32>,
+    amount: f32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -17,7 +17,7 @@ struct Withdrawal {
     client_id: u16,
     #[serde(rename(deserialize = "tx"))]
     tx_id: u32,
-    amount: Option<f32>,
+    amount: f32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -36,7 +36,7 @@ pub enum TransactionType {
 }
 
 pub trait Process {
-    fn process(&self, account: &Account);
+    fn process(&self, account: &mut Account);
 }
 
 impl Transaction {
@@ -49,7 +49,7 @@ impl Transaction {
 }
 
 impl Process for TransactionType {
-    fn process(&self, account: &Account) {
+    fn process(&self, account: &mut Account) {
         match self {
             TransactionType::Deposit(transaction) => transaction.process(account),
             TransactionType::Withdrawal(transaction) => transaction.process(account),
@@ -58,13 +58,33 @@ impl Process for TransactionType {
 }
 
 impl Process for Deposit {
-    fn process(&self, account: &Account) {
-        println!("Processing deposit for account: {}", account.id());
+    fn process(&self, account: &mut Account) {
+        println!("processing deposit for account: {}", account.id());
+
+        if !account.is_locked() {
+            account.available += self.amount;
+            account.total += self.amount;
+        } else {
+            println!(
+                "account {} is locked. ignoring processing transaction.",
+                account.id()
+            );
+        }
     }
 }
 
 impl Process for Withdrawal {
-    fn process(&self, account: &Account) {
-        println!("Processing withdrawal for account: {}", account.id());
+    fn process(&self, account: &mut Account) {
+        println!("processing withdrawal for account: {}", account.id());
+
+        if !account.is_locked() && account.available >= self.amount {
+            account.available -= self.amount;
+            account.total -= self.amount;
+        } else {
+            println!(
+                "account {} is locked or has insufficient founds available. ignoring processing transaction.",
+                account.id()
+            );
+        }
     }
 }

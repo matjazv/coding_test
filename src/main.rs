@@ -38,6 +38,12 @@ fn process_payments(file_path: OsString) -> Result<(), Box<dyn Error>> {
 
         transaction.tx_type.process(account);
     }
+
+    println!("final state:");
+    for account in accounts {
+        println!("{:?}", account.1);
+    }
+
     Ok(())
 }
 
