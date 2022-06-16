@@ -6,19 +6,19 @@ use serde::Deserialize;
 #[derive(Deserialize)]
 pub struct Deposit {
     #[serde(rename(deserialize = "client"))]
-    client_id: u16,
+    pub client_id: u16,
     #[serde(rename(deserialize = "tx"))]
-    tx_id: u32,
-    amount: f32,
+    pub tx_id: u32,
+    pub amount: f32,
 }
 
 #[derive(Deserialize)]
 pub struct Withdrawal {
     #[serde(rename(deserialize = "client"))]
-    client_id: u16,
+    pub client_id: u16,
     #[serde(rename(deserialize = "tx"))]
-    tx_id: u32,
-    amount: f32,
+    pub tx_id: u32,
+    pub amount: f32,
 }
 
 #[derive(Deserialize)]
@@ -66,13 +66,6 @@ pub enum TransactionType {
     Chargeback(Chargeback),
 }
 
-#[derive(Clone, Copy)]
-pub struct DepositedTransaction {
-    pub tx_id: u32,
-    pub amount: f32,
-    pub in_dispute: bool,
-}
-
 pub trait Process {
     fn process(&self, account: &mut Account);
 }
@@ -110,13 +103,7 @@ impl Process for Deposit {
         );
 
         if !account.is_locked() {
-            account.add_deposited_transaction(DepositedTransaction {
-                tx_id: self.tx_id,
-                amount: self.amount,
-                in_dispute: false,
-            });
-            account.available += self.amount;
-            account.total += self.amount;
+            account.deposit(self);
         } else {
             warn!(
                 "account {} is locked. ignoring processing tx.",
@@ -134,18 +121,21 @@ impl Process for Withdrawal {
             account.id()
         );
 
-        if !account.is_locked() && account.available >= self.amount {
-            account.available -= self.amount;
-            account.total -= self.amount;
+        if !account.is_locked() {
+            if !account.withdrawal(self) {
+                warn!("can not process withdrawal for account {}.", account.id());
+            }
         } else {
             warn!(
-                "account {} is locked or has insufficient founds available. ignoring processing tx.",
+                "account {} is locked. ignoring processing tx.",
                 account.id()
             );
         }
     }
 }
 
+// Currently it's possible only to dispute deposit type of transactions.
+// It should be discussed if support for disputing withdrawals is also needed and implement it accordingly.
 impl Process for Dispute {
     fn process(&self, account: &mut Account) {
         info!(
@@ -155,20 +145,9 @@ impl Process for Dispute {
         );
 
         if !account.is_locked() {
-            if let Some(transaction) = account.get_deposited_transaction(self.tx_id) {
-                if !transaction.in_dispute && account.available >= transaction.amount {
-                    account.set_deposited_transaction_as_dispute(self.tx_id);
-                    account.available -= transaction.amount;
-                    account.held += transaction.amount;
-                } else {
-                    warn!(
-                        "tx {} is not in dispute mode or account {} has insufficient founds available. ignoring processing tx.",
-                        self.tx_id, account.id()
-                    );
-                }
-            } else {
+            if !account.set_transaction_as_dispute(self.tx_id) {
                 warn!(
-                    "tx {} does not exist or is not deposited tx. ignoring processing tx.",
+                    "tx {} can not be set to in dispute mode. ignoring processing tx.",
                     self.tx_id
                 );
             }
@@ -190,20 +169,9 @@ impl Process for Resolve {
         );
 
         if !account.is_locked() {
-            if let Some(transaction) = account.get_deposited_transaction(self.tx_id) {
-                if transaction.in_dispute && account.held >= transaction.amount {
-                    account.clear_deposited_transaction_as_dispute(self.tx_id);
-                    account.available += transaction.amount;
-                    account.held -= transaction.amount;
-                } else {
-                    warn!(
-                        "tx {} is not in dispute mode or account {} has insufficient founds held. ignoring processing tx.",
-                        self.tx_id, account.id()
-                    );
-                }
-            } else {
+            if !account.set_transaction_as_resolved(self.tx_id) {
                 warn!(
-                    "tx {} does not exist or is not deposited tx. ignoring processing tx.",
+                    "tx {} can not be set to resolved mode. ignoring processing tx.",
                     self.tx_id
                 );
             }
@@ -225,21 +193,9 @@ impl Process for Chargeback {
         );
 
         if !account.is_locked() {
-            if let Some(transaction) = account.get_deposited_transaction(self.tx_id) {
-                if transaction.in_dispute && account.held >= transaction.amount {
-                    account.clear_deposited_transaction_as_dispute(self.tx_id);
-                    account.held -= transaction.amount;
-                    account.total -= transaction.amount;
-                    account.lock();
-                } else {
-                    warn!(
-                        "tx {} is not in dispute mode or account {} has insufficient founds held. ignoring processing tx.",
-                        self.tx_id, account.id()
-                    );
-                }
-            } else {
+            if !account.set_transaction_as_chargeback(self.tx_id) {
                 warn!(
-                    "tx {} does not exist or is not deposited tx. ignoring processing tx.",
+                    "tx {} can not be set to chargeback mode. ignoring processing tx.",
                     self.tx_id
                 );
             }

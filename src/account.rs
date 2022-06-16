@@ -1,6 +1,6 @@
-use crate::transaction::DepositedTransaction;
+use crate::transaction::{Deposit, Withdrawal};
 
-use log::info;
+use log::{info, warn};
 use serde::{Serialize, Serializer};
 
 fn float_precision_serialize<S>(num: &f32, s: S) -> Result<S::Ok, S::Error>
@@ -15,14 +15,21 @@ pub struct Account {
     #[serde(rename(serialize = "client"))]
     id: u16,
     #[serde(serialize_with = "float_precision_serialize")]
-    pub available: f32,
+    available: f32,
     #[serde(serialize_with = "float_precision_serialize")]
-    pub held: f32,
+    held: f32,
     #[serde(serialize_with = "float_precision_serialize")]
-    pub total: f32,
+    total: f32,
     locked: bool,
     #[serde(skip_serializing)]
-    deposited_transactions: Vec<DepositedTransaction>,
+    transactions: Vec<DepositedTransaction>,
+}
+
+#[derive(Clone, Copy)]
+pub struct DepositedTransaction {
+    pub tx_id: u32,
+    pub amount: f32,
+    pub in_dispute: bool,
 }
 
 impl Account {
@@ -33,7 +40,7 @@ impl Account {
             held: 0.0,
             total: 0.0,
             locked: false,
-            deposited_transactions: Vec::new(),
+            transactions: Vec::new(),
         }
     }
 
@@ -45,40 +52,94 @@ impl Account {
         self.locked
     }
 
-    pub fn lock(&mut self) {
-        info!("locking account {}", self.id);
-        self.locked = true;
+    pub fn add_transaction(&mut self, transaction: DepositedTransaction) {
+        self.transactions.push(transaction);
     }
 
-    pub fn add_deposited_transaction(&mut self, transaction: DepositedTransaction) {
-        self.deposited_transactions.push(transaction);
+    pub fn deposit(&mut self, deposit: &Deposit) {
+        self.add_transaction(DepositedTransaction {
+            tx_id: deposit.tx_id,
+            amount: deposit.amount,
+            in_dispute: false,
+        });
+
+        self.available += deposit.amount;
+        self.total += deposit.amount;
     }
 
-    pub fn get_deposited_transaction(&self, tx_id: u32) -> Option<DepositedTransaction> {
-        for transaction in &self.deposited_transactions {
-            if transaction.tx_id == tx_id {
-                return Some(*transaction);
-            }
+    pub fn withdrawal(&mut self, withdrawal: &Withdrawal) -> bool {
+        if self.available < withdrawal.amount {
+            warn!("account: {} has insufficient funds available", self.id);
+            return false;
         }
 
-        None
+        self.available -= withdrawal.amount;
+        self.total -= withdrawal.amount;
+
+        true
     }
 
-    pub fn set_deposited_transaction_as_dispute(&mut self, tx_id: u32) {
-        for mut transaction in &mut self.deposited_transactions {
-            if transaction.tx_id == tx_id {
-                info!("tx: {} setting in dispute mode", tx_id);
+    pub fn set_transaction_as_dispute(&mut self, tx_id: u32) -> bool {
+        info!("tx: {} setting as in dispute mode", tx_id);
+
+        for transaction in &mut self.transactions {
+            if transaction.tx_id == tx_id
+                && !transaction.in_dispute
+                && self.available >= transaction.amount
+            {
                 transaction.in_dispute = true;
+                self.available -= transaction.amount;
+                self.held += transaction.amount;
+
+                info!("tx: {} successfully set as in dispute mode", tx_id);
+                return true;
             }
         }
+
+        warn!("tx: {} is not found, is already in dispute mode or account has insufficient funds available", tx_id);
+        false
     }
 
-    pub fn clear_deposited_transaction_as_dispute(&mut self, tx_id: u32) {
-        for mut transaction in &mut self.deposited_transactions {
-            if transaction.tx_id == tx_id {
-                info!("tx: {} clearing in dispute mode", tx_id);
+    pub fn set_transaction_as_resolved(&mut self, tx_id: u32) -> bool {
+        info!("tx: {} setting as in resolved mode", tx_id);
+
+        for transaction in &mut self.transactions {
+            if transaction.tx_id == tx_id
+                && transaction.in_dispute
+                && self.held >= transaction.amount
+            {
                 transaction.in_dispute = false;
+                self.available += transaction.amount;
+                self.held -= transaction.amount;
+
+                info!("tx: {} successfully set as in resolved mode", tx_id);
+                return true;
             }
         }
+
+        warn!("tx: {} is not found, is not in dispute mode or account has insufficient held funds available", tx_id);
+        false
+    }
+
+    pub fn set_transaction_as_chargeback(&mut self, tx_id: u32) -> bool {
+        info!("tx: {} setting as in chargeback mode", tx_id);
+
+        for transaction in &mut self.transactions {
+            if transaction.tx_id == tx_id
+                && transaction.in_dispute
+                && self.held >= transaction.amount
+            {
+                transaction.in_dispute = false;
+                self.held -= transaction.amount;
+                self.total -= transaction.amount;
+                self.locked = true;
+
+                info!("tx: {} successfully set as in chargeback mode", tx_id);
+                return true;
+            }
+        }
+
+        warn!("tx: {} is not found, is not in dispute mode or account has insufficient held funds available", tx_id);
+        false
     }
 }
