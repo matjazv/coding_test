@@ -6,6 +6,7 @@ use crate::transaction::Process;
 use crate::transaction::Transaction;
 
 use csv::{ReaderBuilder, Trim};
+use log::error;
 use std::collections::HashMap;
 use std::error::Error;
 use std::ffi::OsString;
@@ -20,11 +21,11 @@ fn get_file_path() -> Result<OsString, Box<dyn Error>> {
 }
 
 fn save_accounts_data(accounts: &HashMap<u16, Account>) -> Result<(), Box<dyn Error>> {
-    let mut wtr = csv::Writer::from_writer(io::stdout());
+    let mut writer = csv::Writer::from_writer(io::stdout());
     for account in accounts {
-        wtr.serialize(account.1)?;
+        writer.serialize(account.1)?;
     }
-    wtr.flush()?;
+    writer.flush()?;
 
     Ok(())
 }
@@ -39,9 +40,15 @@ fn process_payments(
         .trim(Trim::All)
         .delimiter(b',')
         .from_reader(file);
-    for result in reader.deserialize() {
-        let transaction: Transaction = result?;
 
+    for result in reader.deserialize() {
+        let transaction: Transaction = match result {
+            Ok(transaction) => transaction,
+            Err(_) => {
+                error!("can not deserialize transaction. skipping it.");
+                continue;
+            }
+        };
         let account = accounts
             .entry(transaction.client_id())
             .or_insert_with(|| Account::new(transaction.client_id()));

@@ -1,5 +1,6 @@
 use crate::transaction::DepositedTransaction;
 
+use log::info;
 use serde::{Serialize, Serializer};
 
 fn float_precision_serialize<S>(num: &f32, s: S) -> Result<S::Ok, S::Error>
@@ -45,6 +46,7 @@ impl Account {
     }
 
     pub fn lock(&mut self) {
+        info!("locking account {}", self.id);
         self.locked = true;
     }
 
@@ -65,6 +67,7 @@ impl Account {
     pub fn set_deposited_transaction_as_dispute(&mut self, tx_id: u32) {
         for mut transaction in &mut self.deposited_transactions {
             if transaction.tx_id == tx_id {
+                info!("setting tx: {} in dispute mode", tx_id);
                 transaction.in_dispute = true;
             }
         }
@@ -73,6 +76,7 @@ impl Account {
     pub fn clear_deposited_transaction_as_dispute(&mut self, tx_id: u32) {
         for mut transaction in &mut self.deposited_transactions {
             if transaction.tx_id == tx_id {
+                info!("clearing tx: {} in dispute mode", tx_id);
                 transaction.in_dispute = false;
             }
         }
