@@ -26,11 +26,19 @@ pub struct Account {
     transactions: Vec<DepositedTransaction>,
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum DepositedTransactionStatus {
+    Accepted,
+    Dispute,
+    Resolved,
+    Chargeback,
+}
+
 #[derive(Clone, Copy)]
 pub struct DepositedTransaction {
-    pub tx_id: u32,
-    pub amount: Decimal,
-    pub in_dispute: bool,
+    tx_id: u32,
+    amount: Decimal,
+    status: DepositedTransactionStatus,
 }
 
 impl Account {
@@ -75,7 +83,7 @@ impl Account {
         self.add_transaction(DepositedTransaction {
             tx_id: deposit.tx_id,
             amount: deposit.amount,
-            in_dispute: false,
+            status: DepositedTransactionStatus::Accepted,
         });
 
         true
@@ -106,10 +114,10 @@ impl Account {
 
         for transaction in &mut self.transactions {
             if transaction.tx_id == tx_id
-                && !transaction.in_dispute
+                && transaction.status == DepositedTransactionStatus::Accepted
                 && self.available >= transaction.amount
             {
-                transaction.in_dispute = true;
+                transaction.status = DepositedTransactionStatus::Dispute;
                 self.available -= transaction.amount;
                 self.held += transaction.amount;
 
@@ -127,10 +135,12 @@ impl Account {
 
         for transaction in &mut self.transactions {
             if transaction.tx_id == tx_id
-                && transaction.in_dispute
+                && transaction.status == DepositedTransactionStatus::Dispute
                 && self.held >= transaction.amount
             {
-                transaction.in_dispute = false;
+                // Currently it's not possible to dispute transaction multiple times. If this is
+                // a wanted behavior then transaction status should be set to  DepositedTransactionStatus::Accepted
+                transaction.status = DepositedTransactionStatus::Resolved;
                 self.available += transaction.amount;
                 self.held -= transaction.amount;
 
@@ -148,10 +158,10 @@ impl Account {
 
         for transaction in &mut self.transactions {
             if transaction.tx_id == tx_id
-                && transaction.in_dispute
+                && transaction.status == DepositedTransactionStatus::Dispute
                 && self.held >= transaction.amount
             {
-                transaction.in_dispute = false;
+                transaction.status = DepositedTransactionStatus::Chargeback;
                 self.held -= transaction.amount;
                 self.total -= transaction.amount;
                 self.locked = true;
