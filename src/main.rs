@@ -84,3 +84,102 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use rust_decimal::prelude::*;
+
+    #[test]
+    fn test_process_payments_1() {
+        let mut accounts: HashMap<u16, Account> = HashMap::new();
+        assert!(process_payments("transactions_1.csv".parse().unwrap(), &mut accounts).is_ok());
+        assert_eq!(accounts.len(), 2);
+
+        let account = accounts.get(&1).unwrap();
+        assert_eq!(account.available, Decimal::from_str("1.5").unwrap());
+        assert_eq!(account.held, Decimal::from_str("0").unwrap());
+        assert_eq!(account.total, Decimal::from_str("1.5").unwrap());
+        assert!(!account.locked);
+
+        let account = accounts.get(&2).unwrap();
+        assert_eq!(account.available, Decimal::from_str("2").unwrap());
+        assert_eq!(account.held, Decimal::from_str("0").unwrap());
+        assert_eq!(account.total, Decimal::from_str("2").unwrap());
+        assert!(!account.locked);
+    }
+
+    #[test]
+    fn test_process_payments_2() {
+        let mut accounts: HashMap<u16, Account> = HashMap::new();
+        assert!(process_payments("transactions_2.csv".parse().unwrap(), &mut accounts).is_ok());
+        assert_eq!(accounts.len(), 5);
+
+        let account = accounts.get(&1).unwrap();
+        assert_eq!(account.available, Decimal::from_str("1231.744").unwrap());
+        assert_eq!(account.held, Decimal::from_str("0").unwrap());
+        assert_eq!(account.total, Decimal::from_str("1231.744").unwrap());
+        assert!(!account.locked);
+
+        let account = accounts.get(&2).unwrap();
+        assert_eq!(account.available, Decimal::from_str("37.2624").unwrap());
+        assert_eq!(account.held, Decimal::from_str("0").unwrap());
+        assert_eq!(account.total, Decimal::from_str("37.2624").unwrap());
+        assert!(!account.locked);
+
+        let account = accounts.get(&3).unwrap();
+        assert_eq!(account.available, Decimal::from_str("249.8589").unwrap());
+        assert_eq!(account.held, Decimal::from_str("0").unwrap());
+        assert_eq!(account.total, Decimal::from_str("249.8589").unwrap());
+        assert!(!account.locked);
+
+        let account = accounts.get(&4).unwrap();
+        assert_eq!(account.available, Decimal::from_str("200.2442").unwrap());
+        assert_eq!(account.held, Decimal::from_str("0").unwrap());
+        assert_eq!(account.total, Decimal::from_str("200.2442").unwrap());
+        assert!(!account.locked);
+
+        let account = accounts.get(&5).unwrap();
+        assert_eq!(account.available, Decimal::from_str("616.7601").unwrap());
+        assert_eq!(account.held, Decimal::from_str("0").unwrap());
+        assert_eq!(account.total, Decimal::from_str("616.7601").unwrap());
+        assert!(!account.locked);
+    }
+
+    #[test]
+    fn test_process_payments_3() {
+        let mut accounts: HashMap<u16, Account> = HashMap::new();
+        assert!(process_payments("transactions_3.csv".parse().unwrap(), &mut accounts).is_ok());
+        assert_eq!(accounts.len(), 5);
+
+        let account = accounts.get(&1).unwrap();
+        assert_eq!(account.available, Decimal::from_str("50").unwrap());
+        assert_eq!(account.held, Decimal::from_str("200").unwrap());
+        assert_eq!(account.total, Decimal::from_str("250").unwrap());
+        assert!(!account.locked);
+
+        let account = accounts.get(&2).unwrap();
+        assert_eq!(account.available, Decimal::from_str("250").unwrap());
+        assert_eq!(account.held, Decimal::from_str("0").unwrap());
+        assert_eq!(account.total, Decimal::from_str("250").unwrap());
+        assert!(!account.locked);
+
+        let account = accounts.get(&3).unwrap();
+        assert_eq!(account.available, Decimal::from_str("50").unwrap());
+        assert_eq!(account.held, Decimal::from_str("0").unwrap());
+        assert_eq!(account.total, Decimal::from_str("50").unwrap());
+        assert!(account.locked);
+
+        let account = accounts.get(&4).unwrap();
+        assert_eq!(account.available, Decimal::from_str("250").unwrap());
+        assert_eq!(account.held, Decimal::from_str("0").unwrap());
+        assert_eq!(account.total, Decimal::from_str("250").unwrap());
+        assert!(!account.locked);
+
+        let account = accounts.get(&5).unwrap();
+        assert_eq!(account.available, Decimal::from_str("100").unwrap());
+        assert_eq!(account.held, Decimal::from_str("0").unwrap());
+        assert_eq!(account.total, Decimal::from_str("100").unwrap());
+        assert!(!account.locked);
+    }
+}

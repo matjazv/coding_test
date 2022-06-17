@@ -16,6 +16,12 @@ into `accounts.csv`, then inside `coding_test` directory execute:
 cargo run -- transactions.csv > accounts.csv
 ```
 
+## Running Tests
+Inside `coding_test` directory execute:
+```bash
+cargo test
+```
+
 ## Implementation Notes
 * Decimal values: `rust_decimal` crate is used for handling fixed point arithmetic to get a better 
   precision and no rounding errors.
@@ -25,3 +31,6 @@ cargo run -- transactions.csv > accounts.csv
   an option.
 * If client does not exist a new entry is added regarding type of transaction. A discussion is needed
   if a new entry is added only if a transaction type is deposit.
+* Overflow checks are enabled in Release mode. A discussion is needed if this is needed or some other
+  action should be taken to make a system secure enough.
+
