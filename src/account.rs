@@ -17,14 +17,14 @@ pub struct Account {
     #[serde(rename(serialize = "client"))]
     id: u16,
     #[serde(serialize_with = "to_float")]
-    available: Decimal,
+    pub available: Decimal,
     #[serde(serialize_with = "to_float")]
-    held: Decimal,
+    pub held: Decimal,
     #[serde(serialize_with = "to_float")]
-    total: Decimal,
-    locked: bool,
+    pub total: Decimal,
+    pub locked: bool,
     #[serde(skip_serializing)]
-    transactions: Vec<DepositedTransaction>,
+    pub transactions: Vec<DepositedTransaction>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
