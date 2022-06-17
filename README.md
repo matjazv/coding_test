@@ -32,9 +32,10 @@ cargo test
 * It is only possible to dispute a deposit type of transactions. Discussion is needed if withdrawals
   also need a dispute option.
 * It is not possible to dispute a transaction multiple times. Discussion is needed if this should be
-  an option.
-* If client does not exist a new entry is added regarding type of transaction. A discussion is needed
-  if a new entry is added only if a transaction type is deposit.
+  an option. Example: Transaction is set to dispute and then as resolved. Should be possible to set it
+  again as dispute and then maybe chargeback?
+* If client does not exist a new entry is added regardless of the transaction type. A discussion is
+  needed if a new entry is added only if a transaction type is deposit.
 * Overflow checks are enabled in Release mode. A discussion is needed if this is needed or some other
   action should be taken to make a system secure enough.
 
