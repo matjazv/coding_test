@@ -1,6 +1,7 @@
 use crate::account::Account;
 
 use log::{info, warn};
+use rust_decimal::prelude::*;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -9,7 +10,7 @@ pub struct Deposit {
     pub client_id: u16,
     #[serde(rename(deserialize = "tx"))]
     pub tx_id: u32,
-    pub amount: f32,
+    pub amount: Decimal,
 }
 
 #[derive(Deserialize)]
@@ -18,7 +19,7 @@ pub struct Withdrawal {
     pub client_id: u16,
     #[serde(rename(deserialize = "tx"))]
     pub tx_id: u32,
-    pub amount: f32,
+    pub amount: Decimal,
 }
 
 #[derive(Deserialize)]

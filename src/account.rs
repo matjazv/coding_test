@@ -1,25 +1,26 @@
 use crate::transaction::{Deposit, Withdrawal};
 
-use log::{info, warn};
+use log::{error, info, warn};
+use rust_decimal::prelude::*;
 use serde::{Serialize, Serializer};
 
-fn float_precision_serialize<S>(num: &f32, s: S) -> Result<S::Ok, S::Error>
+fn to_float<S>(num: &Decimal, s: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
-    s.serialize_f32(format!("{:.4}", num).parse().unwrap())
+    s.serialize_f64(format!("{:.4}", num).parse().unwrap())
 }
 
 #[derive(Serialize)]
 pub struct Account {
     #[serde(rename(serialize = "client"))]
     id: u16,
-    #[serde(serialize_with = "float_precision_serialize")]
-    available: f32,
-    #[serde(serialize_with = "float_precision_serialize")]
-    held: f32,
-    #[serde(serialize_with = "float_precision_serialize")]
-    total: f32,
+    #[serde(serialize_with = "to_float")]
+    available: Decimal,
+    #[serde(serialize_with = "to_float")]
+    held: Decimal,
+    #[serde(serialize_with = "to_float")]
+    total: Decimal,
     locked: bool,
     #[serde(skip_serializing)]
     transactions: Vec<DepositedTransaction>,
@@ -28,7 +29,7 @@ pub struct Account {
 #[derive(Clone, Copy)]
 pub struct DepositedTransaction {
     pub tx_id: u32,
-    pub amount: f32,
+    pub amount: Decimal,
     pub in_dispute: bool,
 }
 
@@ -36,9 +37,9 @@ impl Account {
     pub fn new(id: u16) -> Account {
         Account {
             id,
-            available: 0.0,
-            held: 0.0,
-            total: 0.0,
+            available: Decimal::from(0),
+            held: Decimal::from(0),
+            total: Decimal::from(0),
             locked: false,
             transactions: Vec::new(),
         }
@@ -57,10 +58,19 @@ impl Account {
     }
 
     pub fn deposit(&mut self, deposit: &Deposit) -> bool {
-        if deposit.amount <= 0 as f32 {
+        if deposit.amount.is_sign_negative() || deposit.amount.is_zero() {
             warn!("tx: {} has zero or negative balance inside", deposit.tx_id);
             return false;
         }
+
+        // In this place an overflow could occurs so it is checked.
+        // Discussion is needed if error message is enough of maybe panic should be thrown.
+        if self.total.checked_add(deposit.amount).is_none() {
+            error!("account {} total amount overflow", self.id);
+            return false;
+        }
+        self.total += deposit.amount;
+        self.available += deposit.amount;
 
         self.add_transaction(DepositedTransaction {
             tx_id: deposit.tx_id,
@@ -68,14 +78,11 @@ impl Account {
             in_dispute: false,
         });
 
-        self.available += deposit.amount;
-        self.total += deposit.amount;
-
         true
     }
 
     pub fn withdrawal(&mut self, withdrawal: &Withdrawal) -> bool {
-        if withdrawal.amount <= 0 as f32 {
+        if withdrawal.amount.is_sign_negative() || withdrawal.amount.is_zero() {
             warn!(
                 "tx: {} has zero or negative balance inside",
                 withdrawal.tx_id
