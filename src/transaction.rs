@@ -75,10 +75,10 @@ impl Transaction {
     pub fn client_id(&self) -> u16 {
         match &self.tx_type {
             TransactionType::Deposit(transaction) => transaction.client_id,
-            TransactionType::Withdrawal(transaction, ..) => transaction.client_id,
-            TransactionType::Dispute(transaction, ..) => transaction.client_id,
-            TransactionType::Resolve(transaction, ..) => transaction.client_id,
-            TransactionType::Chargeback(transaction, ..) => transaction.client_id,
+            TransactionType::Withdrawal(transaction) => transaction.client_id,
+            TransactionType::Dispute(transaction) => transaction.client_id,
+            TransactionType::Resolve(transaction) => transaction.client_id,
+            TransactionType::Chargeback(transaction) => transaction.client_id,
         }
     }
 }

@@ -4,7 +4,7 @@ use log::{error, info, warn};
 use rust_decimal::prelude::*;
 use serde::{Serialize, Serializer};
 
-fn to_float<S>(num: &Decimal, s: S) -> Result<S::Ok, S::Error>
+fn to_decimal_number<S>(num: &Decimal, s: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
@@ -16,11 +16,11 @@ where
 pub struct Account {
     #[serde(rename(serialize = "client"))]
     id: u16,
-    #[serde(serialize_with = "to_float")]
+    #[serde(serialize_with = "to_decimal_number")]
     pub available: Decimal,
-    #[serde(serialize_with = "to_float")]
+    #[serde(serialize_with = "to_decimal_number")]
     pub held: Decimal,
-    #[serde(serialize_with = "to_float")]
+    #[serde(serialize_with = "to_decimal_number")]
     pub total: Decimal,
     pub locked: bool,
     #[serde(skip_serializing)]
@@ -67,13 +67,21 @@ impl Account {
     }
 
     pub fn deposit(&mut self, deposit: &Deposit) -> bool {
+        if self.id != deposit.client_id {
+            error!(
+                "tx: {} has invalid account id: {}. account id: {}",
+                deposit.tx_id, deposit.client_id, self.id
+            );
+            return false;
+        }
+
         if deposit.amount.is_sign_negative() || deposit.amount.is_zero() {
             warn!("tx: {} has zero or negative balance inside", deposit.tx_id);
             return false;
         }
 
         // In this place an overflow could occurs so it is checked.
-        // Discussion is needed if error message is enough of maybe panic should be thrown.
+        // Discussion is needed if error message is enough of maybe a panic should be thrown.
         if self.total.checked_add(deposit.amount).is_none() {
             error!("account {} total amount overflow", self.id);
             return false;
@@ -91,6 +99,14 @@ impl Account {
     }
 
     pub fn withdrawal(&mut self, withdrawal: &Withdrawal) -> bool {
+        if self.id != withdrawal.client_id {
+            error!(
+                "tx: {} has invalid account id: {}. account id: {}",
+                withdrawal.tx_id, withdrawal.client_id, self.id
+            );
+            return false;
+        }
+
         if withdrawal.amount.is_sign_negative() || withdrawal.amount.is_zero() {
             warn!(
                 "tx: {} has zero or negative balance inside",
@@ -238,6 +254,23 @@ mod test {
     }
 
     #[test]
+    fn test_deposit_invalid_account_id() {
+        let mut account = Account::new(12345);
+
+        let deposit = transaction::Deposit {
+            client_id: 12346,
+            tx_id: 22334455,
+            amount: Decimal::from_str("12345.6789").unwrap(),
+        };
+        assert!(!account.deposit(&deposit));
+        assert_eq!(account.available, Decimal::from_str("0").unwrap());
+        assert_eq!(account.held, Decimal::from_str("0").unwrap());
+        assert_eq!(account.total, Decimal::from_str("0").unwrap());
+        assert!(!account.is_locked());
+        assert_eq!(account.transactions.len(), 0);
+    }
+
+    #[test]
     fn test_deposit_negative_transaction_amount() {
         let mut account = Account::new(12345);
 
@@ -312,6 +345,30 @@ mod test {
         assert_eq!(account.available, Decimal::from_str("12219.679").unwrap());
         assert_eq!(account.held, Decimal::from_str("0").unwrap());
         assert_eq!(account.total, Decimal::from_str("12219.679").unwrap());
+        assert!(!account.is_locked());
+        assert_eq!(account.transactions.len(), 1);
+    }
+
+    #[test]
+    fn test_withdrawal_invalid_account_id() {
+        let mut account = Account::new(12345);
+
+        let deposit = transaction::Deposit {
+            client_id: 12345,
+            tx_id: 22334455,
+            amount: Decimal::from_str("12345.6789").unwrap(),
+        };
+        assert!(account.deposit(&deposit));
+
+        let withdrawal = transaction::Withdrawal {
+            client_id: 12346,
+            tx_id: 22334456,
+            amount: Decimal::from_str("125.9999").unwrap(),
+        };
+        assert!(!account.withdrawal(&withdrawal));
+        assert_eq!(account.available, Decimal::from_str("12345.6789").unwrap());
+        assert_eq!(account.held, Decimal::from_str("0").unwrap());
+        assert_eq!(account.total, Decimal::from_str("12345.6789").unwrap());
         assert!(!account.is_locked());
         assert_eq!(account.transactions.len(), 1);
     }
