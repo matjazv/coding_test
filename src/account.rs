@@ -8,7 +8,8 @@ fn to_float<S>(num: &Decimal, s: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
-    s.serialize_f64(format!("{:.4}", num).parse().unwrap())
+    let str = format!("{:.4}", num);
+    s.serialize_str(&str)
 }
 
 #[derive(Serialize)]
@@ -173,5 +174,468 @@ impl Account {
 
         warn!("tx: {} is not found, is not in dispute mode or account has insufficient held funds available", tx_id);
         false
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::transaction;
+
+    #[test]
+    fn test_create_new_account() {
+        let account = Account::new(12345);
+        assert_eq!(account.id, 12345);
+    }
+
+    #[test]
+    fn test_get_account_id() {
+        let account = Account::new(12345);
+        let id = account.id();
+        assert_eq!(id, 12345);
+    }
+
+    #[test]
+    fn test_new_account_is_not_locked() {
+        let account = Account::new(12345);
+        assert!(!account.is_locked());
+    }
+
+    #[test]
+    fn test_add_transaction() {
+        let mut account = Account::new(12345);
+        assert_eq!(account.transactions.len(), 0);
+
+        let transaction = DepositedTransaction {
+            tx_id: 123456789,
+            amount: Decimal::from_str("12345.6789").unwrap(),
+            status: DepositedTransactionStatus::Accepted,
+        };
+        account.add_transaction(transaction);
+        assert_eq!(account.transactions.len(), 1);
+
+        let transaction = account.transactions.get(0).unwrap();
+        assert_eq!(transaction.tx_id, 123456789);
+        assert_eq!(transaction.amount, Decimal::from_str("12345.6789").unwrap());
+        assert!(transaction.status == DepositedTransactionStatus::Accepted);
+    }
+
+    #[test]
+    fn test_deposit_success() {
+        let mut account = Account::new(12345);
+
+        let deposit = transaction::Deposit {
+            client_id: 12345,
+            tx_id: 22334455,
+            amount: Decimal::from_str("12345.6789").unwrap(),
+        };
+        assert!(account.deposit(&deposit));
+        assert_eq!(account.available, Decimal::from_str("12345.6789").unwrap());
+        assert_eq!(account.held, Decimal::from_str("0").unwrap());
+        assert_eq!(account.total, Decimal::from_str("12345.6789").unwrap());
+        assert!(!account.is_locked());
+        assert_eq!(account.transactions.len(), 1);
+    }
+
+    #[test]
+    fn test_deposit_negative_transaction_amount() {
+        let mut account = Account::new(12345);
+
+        let deposit = transaction::Deposit {
+            client_id: 12345,
+            tx_id: 22334455,
+            amount: Decimal::from_str("-0.01").unwrap(),
+        };
+        assert!(!account.deposit(&deposit));
+        assert_eq!(account.available, Decimal::from_str("0").unwrap());
+        assert_eq!(account.held, Decimal::from_str("0").unwrap());
+        assert_eq!(account.total, Decimal::from_str("0").unwrap());
+        assert!(!account.is_locked());
+        assert_eq!(account.transactions.len(), 0);
+    }
+
+    #[test]
+    fn test_deposit_zero_transaction_amount() {
+        let mut account = Account::new(12345);
+
+        let deposit = transaction::Deposit {
+            client_id: 12345,
+            tx_id: 22334455,
+            amount: Decimal::from_str("0").unwrap(),
+        };
+        assert!(!account.deposit(&deposit));
+        assert_eq!(account.available, Decimal::from_str("0").unwrap());
+        assert_eq!(account.held, Decimal::from_str("0").unwrap());
+        assert_eq!(account.total, Decimal::from_str("0").unwrap());
+        assert!(!account.is_locked());
+        assert_eq!(account.transactions.len(), 0);
+    }
+
+    #[test]
+    fn test_deposit_overflow_occurs() {
+        let mut account = Account::new(12345);
+
+        let deposit = transaction::Deposit {
+            client_id: 12345,
+            tx_id: 22334455,
+            amount: Decimal::MAX,
+        };
+        assert!(account.deposit(&deposit));
+        assert_eq!(account.transactions.len(), 1);
+
+        let deposit = transaction::Deposit {
+            client_id: 12345,
+            tx_id: 22334456,
+            amount: Decimal::from_str("1").unwrap(),
+        };
+        assert!(!account.deposit(&deposit));
+        assert_eq!(account.transactions.len(), 1);
+    }
+
+    #[test]
+    fn test_withdrawal_success() {
+        let mut account = Account::new(12345);
+
+        let deposit = transaction::Deposit {
+            client_id: 12345,
+            tx_id: 22334455,
+            amount: Decimal::from_str("12345.6789").unwrap(),
+        };
+        assert!(account.deposit(&deposit));
+
+        let withdrawal = transaction::Withdrawal {
+            client_id: 12345,
+            tx_id: 22334456,
+            amount: Decimal::from_str("125.9999").unwrap(),
+        };
+        assert!(account.withdrawal(&withdrawal));
+        assert_eq!(account.available, Decimal::from_str("12219.679").unwrap());
+        assert_eq!(account.held, Decimal::from_str("0").unwrap());
+        assert_eq!(account.total, Decimal::from_str("12219.679").unwrap());
+        assert!(!account.is_locked());
+        assert_eq!(account.transactions.len(), 1);
+    }
+
+    #[test]
+    fn test_withdrawal_negative_transaction_amount() {
+        let mut account = Account::new(12345);
+
+        let deposit = transaction::Deposit {
+            client_id: 12345,
+            tx_id: 22334455,
+            amount: Decimal::from_str("12345.6789").unwrap(),
+        };
+        assert!(account.deposit(&deposit));
+
+        let withdrawal = transaction::Withdrawal {
+            client_id: 12345,
+            tx_id: 22334456,
+            amount: Decimal::from_str("-100").unwrap(),
+        };
+        assert!(!account.withdrawal(&withdrawal));
+        assert_eq!(account.available, Decimal::from_str("12345.6789").unwrap());
+        assert_eq!(account.held, Decimal::from_str("0").unwrap());
+        assert_eq!(account.total, Decimal::from_str("12345.6789").unwrap());
+        assert!(!account.is_locked());
+        assert_eq!(account.transactions.len(), 1);
+    }
+
+    #[test]
+    fn test_withdrawal_zero_transaction_amount() {
+        let mut account = Account::new(12345);
+
+        let deposit = transaction::Deposit {
+            client_id: 12345,
+            tx_id: 22334455,
+            amount: Decimal::from_str("12345.6789").unwrap(),
+        };
+        assert!(account.deposit(&deposit));
+
+        let withdrawal = transaction::Withdrawal {
+            client_id: 12345,
+            tx_id: 22334456,
+            amount: Decimal::from_str("0").unwrap(),
+        };
+        assert!(!account.withdrawal(&withdrawal));
+        assert_eq!(account.available, Decimal::from_str("12345.6789").unwrap());
+        assert_eq!(account.held, Decimal::from_str("0").unwrap());
+        assert_eq!(account.total, Decimal::from_str("12345.6789").unwrap());
+        assert!(!account.is_locked());
+        assert_eq!(account.transactions.len(), 1);
+    }
+
+    #[test]
+    fn test_withdrawal_insufficient_account_balance() {
+        let mut account = Account::new(12345);
+
+        let deposit = transaction::Deposit {
+            client_id: 12345,
+            tx_id: 22334455,
+            amount: Decimal::from_str("100.2222").unwrap(),
+        };
+        assert!(account.deposit(&deposit));
+
+        let withdrawal = transaction::Withdrawal {
+            client_id: 12345,
+            tx_id: 22334456,
+            amount: Decimal::from_str("100.2223").unwrap(),
+        };
+        assert!(!account.withdrawal(&withdrawal));
+        assert_eq!(account.available, Decimal::from_str("100.2222").unwrap());
+        assert_eq!(account.held, Decimal::from_str("0").unwrap());
+        assert_eq!(account.total, Decimal::from_str("100.2222").unwrap());
+        assert!(!account.is_locked());
+        assert_eq!(account.transactions.len(), 1);
+    }
+
+    #[test]
+    fn test_dispute_success() {
+        let mut account = Account::new(12345);
+
+        let deposit = transaction::Deposit {
+            client_id: 12345,
+            tx_id: 22334455,
+            amount: Decimal::from_str("12345.6789").unwrap(),
+        };
+        assert!(account.deposit(&deposit));
+
+        assert!(account.set_transaction_as_dispute(22334455));
+        assert_eq!(account.available, Decimal::from_str("0").unwrap());
+        assert_eq!(account.held, Decimal::from_str("12345.6789").unwrap());
+        assert_eq!(account.total, Decimal::from_str("12345.6789").unwrap());
+        assert!(!account.is_locked());
+        assert_eq!(account.transactions.len(), 1);
+    }
+
+    #[test]
+    fn test_dispute_transaction_does_not_exist() {
+        let mut account = Account::new(12345);
+
+        let deposit = transaction::Deposit {
+            client_id: 12345,
+            tx_id: 22334455,
+            amount: Decimal::from_str("12345.6789").unwrap(),
+        };
+        assert!(account.deposit(&deposit));
+
+        assert!(!account.set_transaction_as_dispute(22334456));
+        assert_eq!(account.available, Decimal::from_str("12345.6789").unwrap());
+        assert_eq!(account.held, Decimal::from_str("0").unwrap());
+        assert_eq!(account.total, Decimal::from_str("12345.6789").unwrap());
+        assert!(!account.is_locked());
+        assert_eq!(account.transactions.len(), 1);
+    }
+
+    #[test]
+    fn test_dispute_insufficient_account_balance() {
+        let mut account = Account::new(12345);
+
+        let deposit = transaction::Deposit {
+            client_id: 12345,
+            tx_id: 22334455,
+            amount: Decimal::from_str("12345.6789").unwrap(),
+        };
+        assert!(account.deposit(&deposit));
+
+        account.available -= Decimal::from_str("0.0001").unwrap();
+
+        assert!(!account.set_transaction_as_dispute(22334455));
+        assert_eq!(account.available, Decimal::from_str("12345.6788").unwrap());
+        assert_eq!(account.held, Decimal::from_str("0").unwrap());
+        assert_eq!(account.total, Decimal::from_str("12345.6789").unwrap());
+        assert!(!account.is_locked());
+        assert_eq!(account.transactions.len(), 1);
+    }
+
+    #[test]
+    fn test_dispute_invalid_transaction_status() {
+        let mut account = Account::new(12345);
+
+        let deposit = transaction::Deposit {
+            client_id: 12345,
+            tx_id: 22334455,
+            amount: Decimal::from_str("12345.6789").unwrap(),
+        };
+        assert!(account.deposit(&deposit));
+
+        let mut transaction = account.transactions.get_mut(0).unwrap();
+        transaction.status = DepositedTransactionStatus::Dispute;
+
+        assert!(!account.set_transaction_as_dispute(22334455));
+        assert_eq!(account.available, Decimal::from_str("12345.6789").unwrap());
+        assert_eq!(account.held, Decimal::from_str("0").unwrap());
+        assert_eq!(account.total, Decimal::from_str("12345.6789").unwrap());
+        assert!(!account.is_locked());
+        assert_eq!(account.transactions.len(), 1);
+    }
+
+    #[test]
+    fn test_resolve_success() {
+        let mut account = Account::new(12345);
+
+        let deposit = transaction::Deposit {
+            client_id: 12345,
+            tx_id: 22334455,
+            amount: Decimal::from_str("12345.6789").unwrap(),
+        };
+        assert!(account.deposit(&deposit));
+        assert!(account.set_transaction_as_dispute(22334455));
+
+        assert!(account.set_transaction_as_resolved(22334455));
+        assert_eq!(account.available, Decimal::from_str("12345.6789").unwrap());
+        assert_eq!(account.held, Decimal::from_str("0").unwrap());
+        assert_eq!(account.total, Decimal::from_str("12345.6789").unwrap());
+        assert!(!account.is_locked());
+        assert_eq!(account.transactions.len(), 1);
+    }
+
+    #[test]
+    fn test_resolve_transaction_does_not_exist() {
+        let mut account = Account::new(12345);
+
+        let deposit = transaction::Deposit {
+            client_id: 12345,
+            tx_id: 22334455,
+            amount: Decimal::from_str("12345.6789").unwrap(),
+        };
+        assert!(account.deposit(&deposit));
+        assert!(account.set_transaction_as_dispute(22334455));
+
+        assert!(!account.set_transaction_as_resolved(22334456));
+        assert_eq!(account.available, Decimal::from_str("0").unwrap());
+        assert_eq!(account.held, Decimal::from_str("12345.6789").unwrap());
+        assert_eq!(account.total, Decimal::from_str("12345.6789").unwrap());
+        assert!(!account.is_locked());
+        assert_eq!(account.transactions.len(), 1);
+    }
+
+    #[test]
+    fn test_resolve_insufficient_account_balance() {
+        let mut account = Account::new(12345);
+
+        let deposit = transaction::Deposit {
+            client_id: 12345,
+            tx_id: 22334455,
+            amount: Decimal::from_str("12345.6789").unwrap(),
+        };
+        assert!(account.deposit(&deposit));
+        assert!(account.set_transaction_as_dispute(22334455));
+
+        account.held -= Decimal::from_str("0.0001").unwrap();
+
+        assert!(!account.set_transaction_as_resolved(22334455));
+        assert_eq!(account.available, Decimal::from_str("0").unwrap());
+        assert_eq!(account.held, Decimal::from_str("12345.6788").unwrap());
+        assert_eq!(account.total, Decimal::from_str("12345.6789").unwrap());
+        assert!(!account.is_locked());
+        assert_eq!(account.transactions.len(), 1);
+    }
+
+    #[test]
+    fn test_resolve_invalid_transaction_status() {
+        let mut account = Account::new(12345);
+
+        let deposit = transaction::Deposit {
+            client_id: 12345,
+            tx_id: 22334455,
+            amount: Decimal::from_str("12345.6789").unwrap(),
+        };
+        assert!(account.deposit(&deposit));
+        assert!(account.set_transaction_as_dispute(22334455));
+
+        let mut transaction = account.transactions.get_mut(0).unwrap();
+        transaction.status = DepositedTransactionStatus::Accepted;
+
+        assert!(!account.set_transaction_as_resolved(22334455));
+        assert_eq!(account.available, Decimal::from_str("0").unwrap());
+        assert_eq!(account.held, Decimal::from_str("12345.6789").unwrap());
+        assert_eq!(account.total, Decimal::from_str("12345.6789").unwrap());
+        assert!(!account.is_locked());
+        assert_eq!(account.transactions.len(), 1);
+    }
+
+    #[test]
+    fn test_chargeback_success() {
+        let mut account = Account::new(12345);
+
+        let deposit = transaction::Deposit {
+            client_id: 12345,
+            tx_id: 22334455,
+            amount: Decimal::from_str("12345.6789").unwrap(),
+        };
+        assert!(account.deposit(&deposit));
+        assert!(account.set_transaction_as_dispute(22334455));
+
+        assert!(account.set_transaction_as_chargeback(22334455));
+        assert_eq!(account.available, Decimal::from_str("0").unwrap());
+        assert_eq!(account.held, Decimal::from_str("0").unwrap());
+        assert_eq!(account.total, Decimal::from_str("0").unwrap());
+        assert!(account.is_locked());
+        assert_eq!(account.transactions.len(), 1);
+    }
+
+    #[test]
+    fn test_chargeback_transaction_does_not_exist() {
+        let mut account = Account::new(12345);
+
+        let deposit = transaction::Deposit {
+            client_id: 12345,
+            tx_id: 22334455,
+            amount: Decimal::from_str("12345.6789").unwrap(),
+        };
+        assert!(account.deposit(&deposit));
+        assert!(account.set_transaction_as_dispute(22334455));
+
+        assert!(!account.set_transaction_as_chargeback(22334456));
+        assert_eq!(account.available, Decimal::from_str("0").unwrap());
+        assert_eq!(account.held, Decimal::from_str("12345.6789").unwrap());
+        assert_eq!(account.total, Decimal::from_str("12345.6789").unwrap());
+        assert!(!account.is_locked());
+        assert_eq!(account.transactions.len(), 1);
+    }
+
+    #[test]
+    fn test_chargeback_insufficient_account_balance() {
+        let mut account = Account::new(12345);
+
+        let deposit = transaction::Deposit {
+            client_id: 12345,
+            tx_id: 22334455,
+            amount: Decimal::from_str("12345.6789").unwrap(),
+        };
+        assert!(account.deposit(&deposit));
+        assert!(account.set_transaction_as_dispute(22334455));
+
+        account.held -= Decimal::from_str("0.0001").unwrap();
+
+        assert!(!account.set_transaction_as_chargeback(22334455));
+        assert_eq!(account.available, Decimal::from_str("0").unwrap());
+        assert_eq!(account.held, Decimal::from_str("12345.6788").unwrap());
+        assert_eq!(account.total, Decimal::from_str("12345.6789").unwrap());
+        assert!(!account.is_locked());
+        assert_eq!(account.transactions.len(), 1);
+    }
+
+    #[test]
+    fn test_chargeback_invalid_transaction_status() {
+        let mut account = Account::new(12345);
+
+        let deposit = transaction::Deposit {
+            client_id: 12345,
+            tx_id: 22334455,
+            amount: Decimal::from_str("12345.6789").unwrap(),
+        };
+        assert!(account.deposit(&deposit));
+        assert!(account.set_transaction_as_dispute(22334455));
+
+        let mut transaction = account.transactions.get_mut(0).unwrap();
+        transaction.status = DepositedTransactionStatus::Accepted;
+
+        assert!(!account.set_transaction_as_chargeback(22334455));
+        assert_eq!(account.available, Decimal::from_str("0").unwrap());
+        assert_eq!(account.held, Decimal::from_str("12345.6789").unwrap());
+        assert_eq!(account.total, Decimal::from_str("12345.6789").unwrap());
+        assert!(!account.is_locked());
+        assert_eq!(account.transactions.len(), 1);
     }
 }
