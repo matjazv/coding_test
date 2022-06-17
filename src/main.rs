@@ -57,6 +57,9 @@ fn process_payments(
                 continue;
             }
         };
+        // Currently if client doesn't exist a new entry is added regarding type of transaction.
+        // A discussion is needed if a new entry is added only if a transaction type is deposit and
+        // in other cases a transaction is just ignored.
         let account = accounts
             .entry(transaction.client_id())
             .or_insert_with(|| Account::new(transaction.client_id()));
