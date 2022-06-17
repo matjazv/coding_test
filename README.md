@@ -13,7 +13,11 @@ git clone git@github.com:matjazv/coding_test.git
 If a list of transactions is in `transactions.csv` and to get final state of clients accounts
 into `accounts.csv`, then inside `coding_test` directory execute:
 ```bash
-cargo run -- transactions.csv > accounts.csv
+cargo run -- transactions_1.csv > accounts.csv
+```
+A different logging levels may be set with environment variable RUST_LOG:
+```bash
+RUST_LOG=debug cargo run -- transactions_1.csv > accounts.csv
 ```
 
 ## Running Tests
